@@ -8,41 +8,33 @@ async fn main() {
 async fn variant_crossbeam_select() {
     let (tx1, rx1) = crossbeam::channel::unbounded::<&str>();
     let (tx2, rx2) = crossbeam::channel::unbounded::<&str>();
-    tokio::task::spawn_blocking(move || {
+    let (shutdown_tx, shutdown_rx) = crossbeam::channel::unbounded::<()>();
+
+    let blocking_spawn_handle = tokio::task::spawn_blocking(move || {
         println!("Blocking task started!, thread id: {:?}", std::thread::current().id());
-        let mut rx1_closed = false;
-        let mut rx2_closed = false;
         loop {
             // println!("inside the loop");
             crossbeam::channel::select! {
-                    recv(rx1) -> msg => {
-                        match msg {
-                            Ok(msg) => {
-                                println!("rx1: {}", msg);
-                                std::thread::sleep(std::time::Duration::from_secs(3));
-                                println!("rx1 task done after 3s");
-                            }
-                            Err(e) => {
-                                // println!("rx1 error: {}", e);
-                                rx1_closed = true;
-                            }
+                recv(rx1) -> msg => {
+                    match msg {
+                        Ok(msg) => {
+                            println!("rx1: {}", msg);
+                            std::thread::sleep(std::time::Duration::from_secs(3));
+                            println!("rx1 task done after 3s");
                         }
-                    },
-                    recv(rx2) -> msg => {
-                        match msg {
-                            Ok(msg) => {
-                                println!("rx2: {}", msg);
-                            }
-                            Err(e) => {
-                                // println!("rx2 error: {}", e);
-                                rx2_closed = true;
-                            }
-                        }
-                    },
-                    default => std::thread::sleep(std::time::Duration::from_millis(1))
-            }
-            if rx1_closed && rx2_closed {
-                break;
+                        Err(_) => {}
+                    }
+                },
+                recv(rx2) -> msg => {
+                    match msg {
+                        Ok(msg) => println!("rx2: {}", msg),
+                        Err(_) => {}
+                    }
+                },
+                recv(shutdown_rx) -> _ => {
+                    break;
+                }
+                default => std::thread::sleep(std::time::Duration::from_millis(1))
             }
         }
 
@@ -67,6 +59,9 @@ async fn variant_crossbeam_select() {
     drop(tx2);
     println!("dropped tx2");
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    println!("shutting down blocking spawn");
+    let _ = shutdown_tx.send(());
+    blocking_spawn_handle.await;
     println!("Non-blocking task completed!");
 }
 
