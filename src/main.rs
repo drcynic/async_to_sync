@@ -16,20 +16,14 @@ async fn variant_crossbeam_select() {
             // println!("inside the loop");
             crossbeam::channel::select! {
                 recv(rx1) -> msg => {
-                    match msg {
-                        Ok(msg) => {
-                            println!("rx1: {}", msg);
-                            std::thread::sleep(std::time::Duration::from_secs(3));
-                            println!("rx1 task done after 3s");
-                        }
-                        Err(_) => {}
+                    if let Ok(msg) = msg {
+                        println!("rx1: {}", msg);
+                        std::thread::sleep(std::time::Duration::from_secs(3));
+                        println!("rx1 task done after 3s");
                     }
                 },
                 recv(rx2) -> msg => {
-                    match msg {
-                        Ok(msg) => println!("rx2: {}", msg),
-                        Err(_) => {}
-                    }
+                    if let Ok(msg) = msg { println!("rx2: {}", msg) }
                 },
                 recv(shutdown_rx) -> _ => {
                     break;
@@ -61,7 +55,8 @@ async fn variant_crossbeam_select() {
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     println!("shutting down blocking spawn");
     let _ = shutdown_tx.send(());
-    blocking_spawn_handle.await;
+    println!("await blocking spawn to finish");
+    let _ = blocking_spawn_handle.await;
     println!("Non-blocking task completed!");
 }
 
